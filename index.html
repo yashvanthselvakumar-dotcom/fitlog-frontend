@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FitLog — Access your fitness tracking account.">
+  <title>FitLog — Sign In / Sign Up</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="auth-page" id="authPage">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <div class="auth-logo-icon">FL</div>
+          <h1>FitLog</h1>
+        </div>
+        <p class="auth-subtitle">Your fitness tracking companion</p>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">Sign In</button>
+          <button class="auth-tab" id="registerTab" onclick="switchAuthTab('register')">Sign Up</button>
+        </div>
+
+        <div class="auth-error" id="authError"></div>
+
+        <form class="auth-form" id="loginForm" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="loginUsername">Username</label>
+            <input type="text" id="loginUsername" placeholder="Enter your username" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Sign In</button>
+        </form>
+
+        <form class="auth-form hidden" id="registerForm" onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label for="regUsername">Username</label>
+            <input type="text" id="regUsername" placeholder="Choose a username" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="regEmail">Email</label>
+            <input type="email" id="regEmail" placeholder="you@example.com" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="regPassword">Password</label>
+            <input type="password" id="regPassword" placeholder="Create a password" required autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="regRole">Role</label>
+            <select id="regRole">
+              <option value="FITNESS_MEMBER">Fitness Member</option>
+              <option value="TRAINER">Trainer</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" id="registerBtn">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchAuthTab(tab) {
+      document.getElementById('authError').classList.remove('visible');
+      const isLogin = tab === 'login';
+      document.getElementById('loginTab').classList.toggle('active', isLogin);
+      document.getElementById('registerTab').classList.toggle('active', !isLogin);
+      document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+      document.getElementById('registerForm').classList.toggle('hidden', isLogin);
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      btn.textContent = 'Signing in...'; btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) throw new Error((await res.text()) || 'Invalid credentials');
+
+        const data = await res.json();
+        localStorage.setItem('fitlog_token', data.token);
+        localStorage.setItem('fitlog_user', JSON.stringify({ username: data.username, role: data.role }));
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        const el = document.getElementById('authError');
+        el.textContent = err.message || 'Login failed';
+        el.classList.add('visible');
+      } finally {
+        btn.textContent = 'Sign In'; btn.disabled = false;
+      }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const btn = document.getElementById('registerBtn');
+      const username = document.getElementById('regUsername').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const role = document.getElementById('regRole').value;
+
+      btn.textContent = 'Creating account...'; btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password, role })
+        });
+        if (!res.ok) throw new Error((await res.text()) || 'Registration failed');
+
+        showToast('Account created! Please sign in.', 'success');
+        switchAuthTab('login');
+        document.getElementById('loginUsername').value = username;
+      } catch (err) {
+        const el = document.getElementById('authError');
+        el.textContent = err.message || 'Registration failed';
+        el.classList.add('visible');
+      } finally {
+        btn.textContent = 'Create Account'; btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitLog — Workout Sessions</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="app-layout active">
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">FL</div>
+        <span class="sidebar-brand">FitLog</span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item" href="dashboard.html">Dashboard</a>
+        <span class="nav-section-label">Tracking</span>
+        <a class="nav-item" href="sessions.html">Workout Sessions</a>
+        <a class="nav-item" href="exercises.html">Exercise Logs</a>
+        <a class="nav-item" href="metrics.html">Fitness Metrics</a>
+        <span class="nav-section-label">Library</span>
+        <a class="nav-item" href="routines.html">Workout Routines</a>
+        <a class="nav-item" href="routine-exercises.html">Routine Exercises</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="userAvatar">U</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="userName">User</div>
+            <div class="sidebar-user-role" id="userRole">ROLE</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Workout Sessions</h1>
+            <p class="page-subtitle">Track your daily training sessions</p>
+          </div>
+          <button class="btn btn-primary role-write-fitness" onclick="openModal()">+ New Session</button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section-header">
+            <span class="data-section-title">All Sessions</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Session Name</th>
+                  <th>Duration (min)</th>
+                  <th>Calories Burned</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sessionsTableBody">
+                <tr><td colspan="6"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Session Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOverlay(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">New Workout Session</h2>
+        <button class="modal-close" onclick="closeModal()">X</button>
+      </div>
+      <div class="modal-body">
+        <form id="sessionForm" onsubmit="event.preventDefault()">
+          <div class="form-group">
+            <label for="mSessionName">Session Name</label>
+            <input type="text" id="mSessionName" placeholder="e.g. Morning Run" required>
+          </div>
+          <div class="form-group">
+            <label for="mDuration">Duration (minutes)</label>
+            <input type="number" id="mDuration" placeholder="e.g. 45" min="1">
+          </div>
+          <div class="form-group">
+            <label for="mCalories">Calories Burned</label>
+            <input type="number" id="mCalories" placeholder="e.g. 350" min="0">
+          </div>
+          <div class="form-group">
+            <label for="mSessionDate">Date</label>
+            <input type="date" id="mSessionDate" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSession()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="confirmOverlay" onclick="closeConfirm()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Confirm Delete</h2>
+        <button class="modal-close" onclick="closeConfirm()">X</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-body">
+          <p>Are you sure you want to delete this workout session?</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteSession()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editId = null;
+    let deleteId = null;
+
+    document.addEventListener('DOMContentLoaded', loadSessions);
+
+    async function loadSessions() {
+      const tbody = document.getElementById('sessionsTableBody');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>';
+      try {
+        const data = await apiFetch('/workoutSessions');
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-title">No sessions found</div></div></td></tr>';
+          return;
+        }
+        const canWrite = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'FITNESS_MEMBER');
+        
+        tbody.innerHTML = arr.map(s => `
+          <tr>
+            <td>${s.id}</td>
+            <td><strong>${escHtml(s.sessionName)}</strong></td>
+            <td>${s.durationMinutes || 0}</td>
+            <td><span class="badge badge-green">${s.caloriesBurned || 0}</span></td>
+            <td>${formatDate(s.sessionDate)}</td>
+            <td>
+              <div class="table-actions">
+                ${canWrite ? `
+                  <button class="btn btn-secondary btn-sm" onclick="editSession(${s.id})">Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(${s.id})">Delete</button>
+                ` : `<span class="text-muted text-sm">Read Only</span>`}
+              </div>
+            </td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Load failed</td></tr>';
+      }
+    }
+
+    function openModal(data = null) {
+      editId = data ? data.id : null;
+      document.getElementById('modalTitle').textContent = editId ? 'Edit Workout Session' : 'New Workout Session';
+      document.getElementById('mSessionName').value = data ? data.sessionName : '';
+      document.getElementById('mDuration').value = data ? (data.durationMinutes || '') : '';
+      document.getElementById('mCalories').value = data ? (data.caloriesBurned || '') : '';
+      document.getElementById('mSessionDate').value = data ? data.sessionDate : todayStr();
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function closeModalOverlay(e) {
+      if (e.target === e.currentTarget) closeModal();
+    }
+
+    async function editSession(id) {
+      try {
+        const session = await apiFetch(`/workoutSessions/${id}`);
+        openModal(session);
+      } catch {
+        showToast('Failed to load session details', 'error');
+      }
+    }
+
+    async function saveSession() {
+      const name = document.getElementById('mSessionName').value.trim();
+      if (!name) return showToast('Session name is required', 'error');
+
+      const data = {
+        sessionName: name,
+        durationMinutes: parseInt(document.getElementById('mDuration').value) || null,
+        caloriesBurned: parseInt(document.getElementById('mCalories').value) || null,
+        sessionDate: document.getElementById('mSessionDate').value || null
+      };
+
+      try {
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `/workoutSessions/${editId}` : '/workoutSessions';
+        await apiFetch(url, { method, body: JSON.stringify(data) });
+        showToast('Workout session saved successfully!', 'success');
+        closeModal();
+        loadSessions();
+      } catch (err) {
+        showToast(err.message || 'Save failed', 'error');
+      }
+    }
+
+    function confirmDelete(id) {
+      deleteId = id;
+      document.getElementById('confirmOverlay').classList.add('active');
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmOverlay').classList.remove('active');
+    }
+
+    async function deleteSession() {
+      if (!deleteId) return;
+      try {
+        await apiFetch(`/workoutSessions/${deleteId}`, { method: 'DELETE' });
+        showToast('Session deleted successfully', 'success');
+        closeConfirm();
+        loadSessions();
+      } catch (err) {
+        showToast(err.message || 'Delete failed', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

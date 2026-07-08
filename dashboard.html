@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitLog — Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="app-layout active">
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">FL</div>
+        <span class="sidebar-brand">FitLog</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item" href="dashboard.html">Dashboard</a>
+
+        <span class="nav-section-label">Tracking</span>
+        <a class="nav-item" href="sessions.html">Workout Sessions</a>
+        <a class="nav-item" href="exercises.html">Exercise Logs</a>
+        <a class="nav-item" href="metrics.html">Fitness Metrics</a>
+
+        <span class="nav-section-label">Library</span>
+        <a class="nav-item" href="routines.html">Workout Routines</a>
+        <a class="nav-item" href="routine-exercises.html">Routine Exercises</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="userAvatar">U</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="userName">User</div>
+            <div class="sidebar-user-role" id="userRole">ROLE</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Welcome back! Here's your fitness overview.</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">S</div>
+            <div class="stat-value" id="statSessions">0</div>
+            <div class="stat-label">Workout Sessions</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">C</div>
+            <div class="stat-value" id="statCalories">0</div>
+            <div class="stat-label">Total Calories Burned</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">E</div>
+            <div class="stat-value" id="statExercises">0</div>
+            <div class="stat-label">Exercises Logged</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">R</div>
+            <div class="stat-value" id="statRoutines">0</div>
+            <div class="stat-label">Workout Routines</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <!-- Recent Sessions -->
+          <div class="recent-activity">
+            <div class="recent-activity-header">Recent Workout Sessions</div>
+            <div class="activity-list" id="recentSessions">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+
+          <!-- Quick Stats -->
+          <div class="quick-stats">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:14px;">Quick Stats</h3>
+            <div class="quick-stat-item">
+              <span class="quick-stat-label">Latest Body Weight</span>
+              <span class="quick-stat-value" id="statWeight">—</span>
+            </div>
+            <div class="quick-stat-item">
+              <span class="quick-stat-label">Latest Body Fat %</span>
+              <span class="quick-stat-value" id="statFat">—</span>
+            </div>
+            <div class="quick-stat-item">
+              <span class="quick-stat-label">Total Metrics Recorded</span>
+              <span class="quick-stat-value" id="statMetrics">0</span>
+            </div>
+            <div class="quick-stat-item">
+              <span class="quick-stat-label">Routine Exercises</span>
+              <span class="quick-stat-value" id="statRoutineExercises">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+
+    async function loadDashboard() {
+      try {
+        const [sessions, exercises, metrics, routines, routineExercises] = await Promise.all([
+          apiFetch('/workoutSessions').catch(() => []),
+          apiFetch('/exerciseLogs').catch(() => []),
+          apiFetch('/metrics').catch(() => []),
+          apiFetch('/routines').catch(() => []),
+          apiFetch('/routineExercises').catch(() => [])
+        ]);
+
+        const sessArr = Array.isArray(sessions) ? sessions : [];
+        const exArr   = Array.isArray(exercises) ? exercises : [];
+        const metArr  = Array.isArray(metrics) ? metrics : [];
+        const routArr = Array.isArray(routines) ? routines : [];
+        const reArr   = Array.isArray(routineExercises) ? routineExercises : [];
+
+        document.getElementById('statSessions').textContent = sessArr.length;
+        document.getElementById('statCalories').textContent = sessArr.reduce((sum, s) => sum + (s.caloriesBurned || 0), 0).toLocaleString();
+        document.getElementById('statExercises').textContent = exArr.length;
+        document.getElementById('statRoutines').textContent = routArr.length;
+        document.getElementById('statMetrics').textContent = metArr.length;
+        document.getElementById('statRoutineExercises').textContent = reArr.length;
+
+        const validMetrics = metArr.filter(m => m.recordedDate);
+        if (validMetrics.length > 0) {
+          const sorted = [...validMetrics].sort((a, b) => b.recordedDate.localeCompare(a.recordedDate));
+          document.getElementById('statWeight').textContent = sorted[0].bodyWeightKg ? sorted[0].bodyWeightKg + ' kg' : '—';
+          document.getElementById('statFat').textContent = sorted[0].bodyFatPercentage ? sorted[0].bodyFatPercentage + '%' : '—';
+        }
+
+        const recentEl = document.getElementById('recentSessions');
+        const recentSessions = sessArr.slice(-6).reverse();
+        if (recentSessions.length === 0) {
+          recentEl.innerHTML = `<div class="empty-state"><div class="empty-state-title">No sessions yet</div></div>`;
+        } else {
+          recentEl.innerHTML = recentSessions.map(s => `
+            <div class="activity-item">
+              <div class="activity-icon" style="background:#eef2ff;color:#4a6cf7;">S</div>
+              <div class="activity-info">
+                <div class="activity-title">${escHtml(s.sessionName || 'Untitled Session')}</div>
+                <div class="activity-meta">${s.durationMinutes || 0} min · ${s.caloriesBurned || 0} cal · ${formatDate(s.sessionDate)}</div>
+              </div>
+              <span class="badge badge-blue">${s.caloriesBurned || 0} cal</span>
+            </div>`).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>

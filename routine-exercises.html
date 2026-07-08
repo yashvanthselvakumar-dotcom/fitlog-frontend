@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitLog — Routine Exercises</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="app-layout active">
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">FL</div>
+        <span class="sidebar-brand">FitLog</span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item" href="dashboard.html">Dashboard</a>
+        <span class="nav-section-label">Tracking</span>
+        <a class="nav-item" href="sessions.html">Workout Sessions</a>
+        <a class="nav-item" href="exercises.html">Exercise Logs</a>
+        <a class="nav-item" href="metrics.html">Fitness Metrics</a>
+        <span class="nav-section-label">Library</span>
+        <a class="nav-item" href="routines.html">Workout Routines</a>
+        <a class="nav-item" href="routine-exercises.html">Routine Exercises</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="userAvatar">U</div>
+          <div class="sidebar-user-name" id="userName">User</div>
+          <div class="sidebar-user-role" id="userRole">ROLE</div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Routine Exercises</h1>
+            <p class="page-subtitle">Exercises within your training routines</p>
+          </div>
+          <button class="btn btn-primary role-write-routines" onclick="openModal()">+ Add Exercise</button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section-header">
+            <span class="data-section-title">All Routine Exercises</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Exercise Name</th>
+                  <th>Type</th>
+                  <th>Sets</th>
+                  <th>Reps</th>
+                  <th>Rest (s)</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="routineExercisesTableBody">
+                <tr><td colspan="7"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Routine Exercise Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOverlay(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Add Routine Exercise</h2>
+        <button class="modal-close" onclick="closeModal()">X</button>
+      </div>
+      <div class="modal-body">
+        <form id="routineExerciseForm" onsubmit="event.preventDefault()">
+          <div class="form-group">
+            <label for="mREName">Exercise Name</label>
+            <input type="text" id="mREName" placeholder="e.g. Squats" required>
+          </div>
+          <div class="form-group">
+            <label for="mREType">Exercise Type</label>
+            <select id="mREType">
+              <option value="CARDIO">Cardio</option>
+              <option value="STRENGTH">Strength</option>
+              <option value="HIIT">HIIT</option>
+              <option value="FLEXIBILITY">Flexibility</option>
+              <option value="BALANCE">Balance</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="mRESets">Sets</label>
+            <input type="number" id="mRESets" placeholder="e.g. 3" min="1">
+          </div>
+          <div class="form-group">
+            <label for="mREReps">Reps</label>
+            <input type="number" id="mREReps" placeholder="e.g. 10" min="1">
+          </div>
+          <div class="form-group">
+            <label for="mRERest">Rest Time (seconds)</label>
+            <input type="number" id="mRERest" placeholder="e.g. 60" min="0">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRoutineExercise()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="confirmOverlay" onclick="closeConfirm()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Confirm Delete</h2>
+        <button class="modal-close" onclick="closeConfirm()">X</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-body">
+          <p>Are you sure you want to delete this routine exercise?</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteRoutineExercise()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editId = null;
+    let deleteId = null;
+
+    document.addEventListener('DOMContentLoaded', loadRoutineExercises);
+
+    async function loadRoutineExercises() {
+      const tbody = document.getElementById('routineExercisesTableBody');
+      tbody.innerHTML = '<tr><td colspan="7"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>';
+      try {
+        const data = await apiFetch('/routineExercises');
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-title">No routine exercises found</div></div></td></tr>';
+          return;
+        }
+        const canWrite = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'TRAINER');
+        
+        tbody.innerHTML = arr.map(re => `
+          <tr>
+            <td>${re.id}</td>
+            <td><strong>${escHtml(re.exerciseName)}</strong></td>
+            <td>
+              <span class="badge ${re.exerciseType === 'STRENGTH' ? 'badge-red' : re.exerciseType === 'CARDIO' ? 'badge-green' : 'badge-orange'}">
+                ${re.exerciseType}
+              </span>
+            </td>
+            <td>${re.sets || 0}</td>
+            <td>${re.reps || 0}</td>
+            <td>${re.restTimeSeconds || 0}s</td>
+            <td>
+              <div class="table-actions">
+                ${canWrite ? `
+                  <button class="btn btn-secondary btn-sm" onclick="editRoutineExercise(${re.id})">Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(${re.id})">Delete</button>
+                ` : `<span class="text-muted text-sm">Read Only</span>`}
+              </div>
+            </td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Load failed</td></tr>';
+      }
+    }
+
+    function openModal(data = null) {
+      editId = data ? data.id : null;
+      document.getElementById('modalTitle').textContent = editId ? 'Edit Routine Exercise' : 'Add Routine Exercise';
+      document.getElementById('mREName').value = data ? data.exerciseName : '';
+      document.getElementById('mREType').value = data ? data.exerciseType : 'CARDIO';
+      document.getElementById('mRESets').value = data ? (data.sets || '') : '';
+      document.getElementById('mREReps').value = data ? (data.reps || '') : '';
+      document.getElementById('mRERest').value = data ? (data.restTimeSeconds || '') : '';
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function closeModalOverlay(e) {
+      if (e.target === e.currentTarget) closeModal();
+    }
+
+    async function editRoutineExercise(id) {
+      try {
+        const re = await apiFetch(`/routineExercises/${id}`);
+        openModal(re);
+      } catch {
+        showToast('Failed to load routine exercise details', 'error');
+      }
+    }
+
+    async function saveRoutineExercise() {
+      const name = document.getElementById('mREName').value.trim();
+      if (!name) return showToast('Exercise name is required', 'error');
+
+      const data = {
+        exerciseName: name,
+        exerciseType: document.getElementById('mREType').value,
+        sets: parseInt(document.getElementById('mRESets').value) || null,
+        reps: parseInt(document.getElementById('mREReps').value) || null,
+        restTimeSeconds: parseInt(document.getElementById('mRERest').value) || null
+      };
+
+      try {
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `/routineExercises/${editId}` : '/routineExercises';
+        await apiFetch(url, { method, body: JSON.stringify(data) });
+        showToast('Routine exercise saved successfully!', 'success');
+        closeModal();
+        loadRoutineExercises();
+      } catch (err) {
+        showToast(err.message || 'Save failed', 'error');
+      }
+    }
+
+    function confirmDelete(id) {
+      deleteId = id;
+      document.getElementById('confirmOverlay').classList.add('active');
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmOverlay').classList.remove('active');
+    }
+
+    async function deleteRoutineExercise() {
+      if (!deleteId) return;
+      try {
+        await apiFetch(`/routineExercises/${deleteId}`, { method: 'DELETE' });
+        showToast('Routine exercise deleted successfully', 'success');
+        closeConfirm();
+        loadRoutineExercises();
+      } catch (err) {
+        showToast(err.message || 'Delete failed', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

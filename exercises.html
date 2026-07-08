@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitLog — Exercise Logs</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="app-layout active">
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">FL</div>
+        <span class="sidebar-brand">FitLog</span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item" href="dashboard.html">Dashboard</a>
+        <span class="nav-section-label">Tracking</span>
+        <a class="nav-item" href="sessions.html">Workout Sessions</a>
+        <a class="nav-item" href="exercises.html">Exercise Logs</a>
+        <a class="nav-item" href="metrics.html">Fitness Metrics</a>
+        <span class="nav-section-label">Library</span>
+        <a class="nav-item" href="routines.html">Workout Routines</a>
+        <a class="nav-item" href="routine-exercises.html">Routine Exercises</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="userAvatar">U</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="userName">User</div>
+            <div class="sidebar-user-role" id="userRole">ROLE</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Exercise Logs</h1>
+            <p class="page-subtitle">Record every set, rep, and weight</p>
+          </div>
+          <button class="btn btn-primary role-write-fitness" onclick="openModal()">+ Log Exercise</button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section-header">
+            <span class="data-section-title">All Exercise Logs</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Exercise Name</th>
+                  <th>Sets</th>
+                  <th>Reps</th>
+                  <th>Weight (kg)</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="exercisesTableBody">
+                <tr><td colspan="7"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Exercise Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOverlay(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Log Exercise</h2>
+        <button class="modal-close" onclick="closeModal()">X</button>
+      </div>
+      <div class="modal-body">
+        <form id="exerciseForm" onsubmit="event.preventDefault()">
+          <div class="form-group">
+            <label for="mExName">Exercise Name</label>
+            <input type="text" id="mExName" placeholder="e.g. Bench Press" required>
+          </div>
+          <div class="form-group">
+            <label for="mSets">Sets</label>
+            <input type="number" id="mSets" placeholder="e.g. 4" min="1">
+          </div>
+          <div class="form-group">
+            <label for="mReps">Reps</label>
+            <input type="number" id="mReps" placeholder="e.g. 12" min="1">
+          </div>
+          <div class="form-group">
+            <label for="mWeight">Weight (kg)</label>
+            <input type="number" id="mWeight" placeholder="e.g. 60" step="0.5" min="0">
+          </div>
+          <div class="form-group">
+            <label for="mExDate">Date</label>
+            <input type="date" id="mExDate" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveExercise()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="confirmOverlay" onclick="closeConfirm()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Confirm Delete</h2>
+        <button class="modal-close" onclick="closeConfirm()">X</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-body">
+          <p>Are you sure you want to delete this exercise log?</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteExercise()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editId = null;
+    let deleteId = null;
+
+    document.addEventListener('DOMContentLoaded', loadExercises);
+
+    async function loadExercises() {
+      const tbody = document.getElementById('exercisesTableBody');
+      tbody.innerHTML = '<tr><td colspan="7"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>';
+      try {
+        const data = await apiFetch('/exerciseLogs');
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-title">No exercise logs</div></div></td></tr>';
+          return;
+        }
+        const canWrite = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'FITNESS_MEMBER');
+        
+        tbody.innerHTML = arr.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td><strong>${escHtml(e.exerciseName)}</strong></td>
+            <td>${e.sets || 0}</td>
+            <td>${e.reps || 0}</td>
+            <td><span class="badge badge-purple">${e.weightKg || 0} kg</span></td>
+            <td>${formatDate(e.exerciseDate)}</td>
+            <td>
+              <div class="table-actions">
+                ${canWrite ? `
+                  <button class="btn btn-secondary btn-sm" onclick="editExercise(${e.id})">Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(${e.id})">Delete</button>
+                ` : `<span class="text-muted text-sm">Read Only</span>`}
+              </div>
+            </td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Load failed</td></tr>';
+      }
+    }
+
+    function openModal(data = null) {
+      editId = data ? data.id : null;
+      document.getElementById('modalTitle').textContent = editId ? 'Edit Exercise Log' : 'Log Exercise';
+      document.getElementById('mExName').value = data ? data.exerciseName : '';
+      document.getElementById('mSets').value = data ? (data.sets || '') : '';
+      document.getElementById('mReps').value = data ? (data.reps || '') : '';
+      document.getElementById('mWeight').value = data ? (data.weightKg || '') : '';
+      document.getElementById('mExDate').value = data ? data.exerciseDate : todayStr();
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function closeModalOverlay(e) {
+      if (e.target === e.currentTarget) closeModal();
+    }
+
+    async function editExercise(id) {
+      try {
+        const exercise = await apiFetch(`/exerciseLogs/${id}`);
+        openModal(exercise);
+      } catch {
+        showToast('Failed to load exercise details', 'error');
+      }
+    }
+
+    async function saveExercise() {
+      const name = document.getElementById('mExName').value.trim();
+      if (!name) return showToast('Exercise name is required', 'error');
+
+      const data = {
+        exerciseName: name,
+        sets: parseInt(document.getElementById('mSets').value) || null,
+        reps: parseInt(document.getElementById('mReps').value) || null,
+        weightKg: parseFloat(document.getElementById('mWeight').value) || null,
+        exerciseDate: document.getElementById('mExDate').value || null
+      };
+
+      try {
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `/exerciseLogs/${editId}` : '/exerciseLogs';
+        await apiFetch(url, { method, body: JSON.stringify(data) });
+        showToast('Exercise log saved successfully!', 'success');
+        closeModal();
+        loadExercises();
+      } catch (err) {
+        showToast(err.message || 'Save failed', 'error');
+      }
+    }
+
+    function confirmDelete(id) {
+      deleteId = id;
+      document.getElementById('confirmOverlay').classList.add('active');
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmOverlay').classList.remove('active');
+    }
+
+    async function deleteExercise() {
+      if (!deleteId) return;
+      try {
+        await apiFetch(`/exerciseLogs/${deleteId}`, { method: 'DELETE' });
+        showToast('Exercise log deleted successfully', 'success');
+        closeConfirm();
+        loadExercises();
+      } catch (err) {
+        showToast(err.message || 'Delete failed', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitLog — Workout Routines</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/common.js"></script>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="app-layout active">
+    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">FL</div>
+        <span class="sidebar-brand">FitLog</span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Overview</span>
+        <a class="nav-item" href="dashboard.html">Dashboard</a>
+        <span class="nav-section-label">Tracking</span>
+        <a class="nav-item" href="sessions.html">Workout Sessions</a>
+        <a class="nav-item" href="exercises.html">Exercise Logs</a>
+        <a class="nav-item" href="metrics.html">Fitness Metrics</a>
+        <span class="nav-section-label">Library</span>
+        <a class="nav-item" href="routines.html">Workout Routines</a>
+        <a class="nav-item" href="routine-exercises.html">Routine Exercises</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-avatar" id="userAvatar">U</div>
+          <div class="sidebar-user-name" id="userName">User</div>
+          <div class="sidebar-user-role" id="userRole">ROLE</div>
+        </div>
+        <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Workout Routines</h1>
+            <p class="page-subtitle">Manage your training programs</p>
+          </div>
+          <button class="btn btn-primary role-write-routines" onclick="openModal()">+ New Routine</button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section-header">
+            <span class="data-section-title">All Routines</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Description</th>
+                  <th>Difficulty</th>
+                  <th>Target Goal</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="routinesTableBody">
+                <tr><td colspan="6"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Routine Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOverlay(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">New Workout Routine</h2>
+        <button class="modal-close" onclick="closeModal()">X</button>
+      </div>
+      <div class="modal-body">
+        <form id="routineForm" onsubmit="event.preventDefault()">
+          <div class="form-group">
+            <label for="mRoutineTitle">Title</label>
+            <input type="text" id="mRoutineTitle" placeholder="e.g. Upper Body Strength" required>
+          </div>
+          <div class="form-group">
+            <label for="mRoutineDesc">Description</label>
+            <textarea id="mRoutineDesc" placeholder="Describe this routine..." rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="mDifficulty">Difficulty Level</label>
+            <select id="mDifficulty">
+              <option value="BEGINNER">Beginner</option>
+              <option value="INTERMEDIATE">Intermediate</option>
+              <option value="ADVANCED">Advanced</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="mTargetGoal">Target Goal</label>
+            <select id="mTargetGoal">
+              <option value="WEIGHT_LOSS">Weight Loss</option>
+              <option value="MUSCLE_GAIN">Muscle Gain</option>
+              <option value="STRENGTH">Strength</option>
+              <option value="ENDURANCE">Endurance</option>
+              <option value="FLEXIBILITY">Flexibility</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRoutine()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="confirmOverlay" onclick="closeConfirm()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Confirm Delete</h2>
+        <button class="modal-close" onclick="closeConfirm()">X</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-body">
+          <p>Are you sure you want to delete this workout routine?</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteRoutine()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editId = null;
+    let deleteId = null;
+
+    document.addEventListener('DOMContentLoaded', loadRoutines);
+
+    async function loadRoutines() {
+      const tbody = document.getElementById('routinesTableBody');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="loading-overlay"><div class="spinner"></div></div></td></tr>';
+      try {
+        const data = await apiFetch('/routines');
+        const arr = Array.isArray(data) ? data : [];
+        if (arr.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-title">No routines found</div></div></td></tr>';
+          return;
+        }
+        const canWrite = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'TRAINER');
+        
+        tbody.innerHTML = arr.map(r => `
+          <tr>
+            <td>${r.id}</td>
+            <td><strong>${escHtml(r.title)}</strong></td>
+            <td>${escHtml(r.description || '—')}</td>
+            <td>
+              <span class="badge ${r.difficultyLevel === 'BEGINNER' ? 'badge-green' : r.difficultyLevel === 'ADVANCED' ? 'badge-red' : 'badge-orange'}">
+                ${r.difficultyLevel}
+              </span>
+            </td>
+            <td><span class="badge badge-cyan">${r.targetGoal}</span></td>
+            <td>
+              <div class="table-actions">
+                ${canWrite ? `
+                  <button class="btn btn-secondary btn-sm" onclick="editRoutine(${r.id})">Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(${r.id})">Delete</button>
+                ` : `<span class="text-muted text-sm">Read Only</span>`}
+              </div>
+            </td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Load failed</td></tr>';
+      }
+    }
+
+    function openModal(data = null) {
+      editId = data ? data.id : null;
+      document.getElementById('modalTitle').textContent = editId ? 'Edit Workout Routine' : 'New Workout Routine';
+      document.getElementById('mRoutineTitle').value = data ? data.title : '';
+      document.getElementById('mRoutineDesc').value = data ? (data.description || '') : '';
+      document.getElementById('mDifficulty').value = data ? data.difficultyLevel : 'BEGINNER';
+      document.getElementById('mTargetGoal').value = data ? data.targetGoal : 'WEIGHT_LOSS';
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function closeModalOverlay(e) {
+      if (e.target === e.currentTarget) closeModal();
+    }
+
+    async function editRoutine(id) {
+      try {
+        const routine = await apiFetch(`/routines/${id}`);
+        openModal(routine);
+      } catch {
+        showToast('Failed to load routine details', 'error');
+      }
+    }
+
+    async function saveRoutine() {
+      const title = document.getElementById('mRoutineTitle').value.trim();
+      if (!title) return showToast('Routine title is required', 'error');
+
+      const data = {
+        title: title,
+        description: document.getElementById('mRoutineDesc').value.trim(),
+        difficultyLevel: document.getElementById('mDifficulty').value,
+        targetGoal: document.getElementById('mTargetGoal').value
+      };
+
+      try {
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `/routines/${editId}` : '/routines';
+        await apiFetch(url, { method, body: JSON.stringify(data) });
+        showToast('Routine saved successfully!', 'success');
+        closeModal();
+        loadRoutines();
+      } catch (err) {
+        showToast(err.message || 'Save failed', 'error');
+      }
+    }
+
+    function confirmDelete(id) {
+      deleteId = id;
+      document.getElementById('confirmOverlay').classList.add('active');
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirmOverlay').classList.remove('active');
+    }
+
+    async function deleteRoutine() {
+      if (!deleteId) return;
+      try {
+        await apiFetch(`/routines/${deleteId}`, { method: 'DELETE' });
+        showToast('Routine deleted successfully', 'success');
+        closeConfirm();
+        loadRoutines();
+      } catch (err) {
+        showToast(err.message || 'Delete failed', 'error');
+      }
+    }
+  </script>
+</body>
+</html>
